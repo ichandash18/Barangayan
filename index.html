@@ -88,7 +88,9 @@ select{border:1px solid var(--line);border-radius:8px;padding:.45rem .6rem;backg
 .mini{width:1.4em;height:1.4em;border-radius:50%;object-fit:contain;background:#fff;border:1px solid var(--line);vertical-align:-.35em;margin-right:.4rem}
 @media(max-width:560px){.logo{width:48px;height:48px}}
 @media(max-width:560px){.big{font-size:2.8rem}.side input{font-size:1.05rem}}
-@media(prefers-reduced-motion:reduce){*{transition:none!important}}
+button.ring{background:#b02a2a;color:#fff;border-color:#b02a2a;font-weight:600;animation:pulse 1s ease-in-out infinite}
+@keyframes pulse{50%{box-shadow:0 0 0 6px rgba(176,42,42,.3)}}
+@media(prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style>
 </head>
 <body>
@@ -165,13 +167,16 @@ const tn=t=>S.teams[t].name||('Team '+'AB'[t]);
 let ac=null;
 function unlock(){try{ac=ac||new(window.AudioContext||window.webkitAudioContext)();if(ac.state==='suspended')ac.resume()}catch(e){}}
 function beep(at,dur,f){const o=ac.createOscillator(),g=ac.createGain(),t=ac.currentTime+at;o.type='sine';o.frequency.value=f;o.connect(g);g.connect(ac.destination);g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(.4,t+.02);g.gain.linearRampToValueAtTime(0,t+dur);o.start(t);o.stop(t+dur+.05)}
-function alarm(){if(S.sound===false)return;try{unlock();[0,.5,1,1.5].forEach(d=>beep(d,.35,880));if(navigator.vibrate)navigator.vibrate([300,150,300,150,300])}catch(e){}}
+let al=null;
+function ring(){try{[0,.5,1,1.5].forEach(d=>beep(d,.35,880));if(navigator.vibrate)navigator.vibrate([300,150,300,150,300])}catch(e){}}
+function alarm(){if(S.sound===false||al)return;unlock();ring();al=setInterval(ring,2600);$('rs').classList.add('ring')}
+function stopAlarm(){clearInterval(al);al=null;$('rs').classList.remove('ring');if(navigator.vibrate)navigator.vibrate(0)}
 /* timer */
 let left=S.mins*60,iv=null;
 function paint(){const m=Math.floor(left/60),s=left%60;const e=$('tm');e.textContent=String(m).padStart(2,'0')+':'+String(s).padStart(2,'0');e.classList.toggle('low',left<=60&&left>0)}
 function stop(){clearInterval(iv);iv=null;$('go').textContent='Start'}
-function toggle(){if(iv){stop();return}unlock();if(left<=0)left=S.mins*60;$('go').textContent='Pause';iv=setInterval(()=>{left--;paint();if(left<=0){stop();alarm();toast('Time’s up for this round.')}},1000);paint()}
-function resetTimer(){stop();left=S.mins*60;paint()}
+function toggle(){if(iv){stop();return}unlock();stopAlarm();if(left<=0)left=S.mins*60;$('go').textContent='Pause';iv=setInterval(()=>{left--;paint();if(left<=0){stop();alarm();toast(S.sound===false?'Time’s up for this round.':'Time’s up. Press Reset to stop the alarm.')}},1000);paint()}
+function resetTimer(){stop();stopAlarm();left=S.mins*60;paint()}
 
 /* rounds */
 const TYPES=[['random','Random'],['singles','Singles'],['mixed','Mixed doubles'],['men','Men’s doubles'],['women','Women’s doubles']];
@@ -254,7 +259,7 @@ function render(){
   document.querySelectorAll('.team .tname')[t].textContent=tn(t)}));
 [0,1].forEach(t=>$('n'+t).addEventListener('change',render));
 [0,1].forEach(t=>{$('lg'+t).onclick=()=>$('f'+t).click();$('f'+t).onchange=e=>{setLogo(t,e.target.files[0]);e.target.value=''};$('rl'+t).onclick=()=>{delete S.teams[t].logo;save();render()}});
-$('snd').onchange=e=>{S.sound=e.target.checked;save();if(S.sound){unlock();try{beep(0,.25,660)}catch(x){}}};
+$('snd').onchange=e=>{S.sound=e.target.checked;save();if(S.sound){unlock();try{beep(0,.25,660)}catch(x){}}else stopAlarm()};
 $('next').onclick=next;$('go').onclick=toggle;$('rs').onclick=resetTimer;
 $('courts').onchange=e=>{S.courts=Math.max(1,Math.min(12,+e.target.value||1));save();render()};
 $('mins').onchange=e=>{S.mins=Math.max(1,Math.min(60,+e.target.value||15));save();resetTimer()};
