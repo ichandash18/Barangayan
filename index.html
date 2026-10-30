@@ -111,6 +111,7 @@ select{border:1px solid var(--line);border-radius:8px;padding:.45rem .6rem;backg
     <button id="go">Start</button><button id="rs">Reset</button>
     <label>Minutes <input type="number" id="mins" min="1" max="60"></label>
     <label>Courts <input type="number" id="courts" min="1" max="12"></label>
+    <label><input type="checkbox" id="snd"> Sound</label>
     <button class="pri" id="next">Next round</button>
   </div>
 
@@ -137,7 +138,7 @@ select{border:1px solid var(--line);border-radius:8px;padding:.45rem .6rem;backg
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script>
 const K='teamMatchDash.v1';
-const fresh=()=>({teams:[{name:'Team A',players:[]},{name:'Team B',players:[]}],courts:2,types:[],mins:15,round:0,cur:[],log:[]});
+const fresh=()=>({teams:[{name:'Team A',players:[]},{name:'Team B',players:[]}],courts:2,types:[],sound:true,mins:15,round:0,cur:[],log:[]});
 let S=fresh();
 try{const r=localStorage.getItem(K);if(r)S=Object.assign(fresh(),JSON.parse(r))}catch(e){}
 const $=id=>document.getElementById(id);
@@ -160,11 +161,16 @@ function setLogo(t,file){
 }
 const tn=t=>S.teams[t].name||('Team '+'AB'[t]);
 
+/* sound */
+let ac=null;
+function unlock(){try{ac=ac||new(window.AudioContext||window.webkitAudioContext)();if(ac.state==='suspended')ac.resume()}catch(e){}}
+function beep(at,dur,f){const o=ac.createOscillator(),g=ac.createGain(),t=ac.currentTime+at;o.type='sine';o.frequency.value=f;o.connect(g);g.connect(ac.destination);g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(.4,t+.02);g.gain.linearRampToValueAtTime(0,t+dur);o.start(t);o.stop(t+dur+.05)}
+function alarm(){if(S.sound===false)return;try{unlock();[0,.5,1,1.5].forEach(d=>beep(d,.35,880));if(navigator.vibrate)navigator.vibrate([300,150,300,150,300])}catch(e){}}
 /* timer */
 let left=S.mins*60,iv=null;
 function paint(){const m=Math.floor(left/60),s=left%60;const e=$('tm');e.textContent=String(m).padStart(2,'0')+':'+String(s).padStart(2,'0');e.classList.toggle('low',left<=60&&left>0)}
 function stop(){clearInterval(iv);iv=null;$('go').textContent='Start'}
-function toggle(){if(iv){stop();return}if(left<=0)left=S.mins*60;$('go').textContent='Pause';iv=setInterval(()=>{left--;paint();if(left<=0){stop();toast('Time’s up for this round.')}},1000);paint()}
+function toggle(){if(iv){stop();return}unlock();if(left<=0)left=S.mins*60;$('go').textContent='Pause';iv=setInterval(()=>{left--;paint();if(left<=0){stop();alarm();toast('Time’s up for this round.')}},1000);paint()}
 function resetTimer(){stop();left=S.mins*60;paint()}
 
 /* rounds */
@@ -222,7 +228,7 @@ function render(){
   const pt=[0,0];S.log.forEach(g=>{pt[0]+=+g.sa||0;pt[1]+=+g.sb||0});
   $('pts').textContent=(pt[0]||pt[1])?'Points '+pt[0]+' – '+pt[1]:'';
   [0,1].forEach(t=>{const L=S.teams[t].logo,b=$('lg'+t);b.innerHTML=L?`<img src="${L}" alt="">`:'Add<br>logo';b.classList.toggle('has',!!L);b.setAttribute('aria-label',(L?'Change ':'Add ')+tn(t)+' logo');$('rl'+t).hidden=!L});
-  $('rd').textContent=S.round;$('courts').value=S.courts;$('mins').value=S.mins;
+  $('rd').textContent=S.round;$('courts').value=S.courts;$('mins').value=S.mins;$('snd').checked=S.sound!==false;
   $('next').textContent=S.round?'Next round':'Start round 1';
   $('hint').textContent=S.cur.length?'Tap the winning side on each court and add scores if you like. Choose each court’s game type for the next round, then tap Next round.':'Add players to both teams, choose each court’s game type, then tap Start round 1.';
   $('setup').innerHTML=Array.from({length:S.courts},(_,c)=>`<label>Court ${c+1} <select onchange="setType(${c},this.value)" aria-label="Game type for court ${c+1}">${TYPES.map(([k,v])=>`<option value="${k}" ${(S.types[c]||'random')===k?'selected':''}>${v}</option>`).join('')}</select></label>`).join('');
@@ -248,6 +254,7 @@ function render(){
   document.querySelectorAll('.team .tname')[t].textContent=tn(t)}));
 [0,1].forEach(t=>$('n'+t).addEventListener('change',render));
 [0,1].forEach(t=>{$('lg'+t).onclick=()=>$('f'+t).click();$('f'+t).onchange=e=>{setLogo(t,e.target.files[0]);e.target.value=''};$('rl'+t).onclick=()=>{delete S.teams[t].logo;save();render()}});
+$('snd').onchange=e=>{S.sound=e.target.checked;save();if(S.sound){unlock();try{beep(0,.25,660)}catch(x){}}};
 $('next').onclick=next;$('go').onclick=toggle;$('rs').onclick=resetTimer;
 $('courts').onchange=e=>{S.courts=Math.max(1,Math.min(12,+e.target.value||1));save();render()};
 $('mins').onchange=e=>{S.mins=Math.max(1,Math.min(60,+e.target.value||15));save();resetTimer()};
